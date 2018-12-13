@@ -3,17 +3,17 @@ Grab script text form the Avatarspirit website
 """
 
 from __future__ import print_function
-
+from glob import glob
 import requests
 import re
 from bs4 import BeautifulSoup
-import pandas as pd
 import os
 import time
-import matplotlib as mpl
-mpl.use('TkAgg')
-import matplotlib.pyplot as plt
 
+# import matplotlib.pyplot as plt
+import pandas as pd
+# import matplotlib as mpl
+# mpl.use('TkAgg')
 
 # Each episode fetched http://atla.avatarspirit.net/transcripts.php?num=101
 # BASE_URL = "http://atla.avatarspirit.net/transcripts.p
@@ -24,6 +24,7 @@ EPI_URL = 'http://avatar.wikia.com/wiki/Avatar_Wiki:Transcripts'
 # Trying to pull from wikia instead, they have a tabular format
 BASE_URL = "http://avatar.wikia.com/wiki/Transcript:"
 OUTPUT_PATH = '/Users/joesaitta/iCloud/school/2018_fall/DS745_Viz/project_3'
+
 
 # Get episode titles
 def get_episodes():
@@ -91,7 +92,9 @@ def get_transcripts(title, episode_num, season):
                            title + '.csv')
     script_df.to_csv(outfile)
 
+
 if __name__ == "__main__":
+    # Uncomment the code below to download the episode transcripts
 
     # episodes_df = get_episodes()
     # for episode in episodes_df.itertuples():
@@ -99,17 +102,26 @@ if __name__ == "__main__":
     #     time.sleep(5)
     #     get_transcripts(episode.title, episode.num, episode.season)
 
-    files = glob.glob(os.path.join(OUTPUT_PATH, '*.csv'))
+    if os.path.exists(os.path.join(OUTPUT_PATH, 'episode_dialog.csv')):
+        os.remove(os.path.join(OUTPUT_PATH, 'episode_dialog.csv'))
+        print('DIAG: removing episode_dialog.csv')
+    if os.path.exists(os.path.join(OUTPUT_PATH, 'all_episodes.csv')):
+        os.remove(os.path.join(OUTPUT_PATH, 'all_episodes.csv'))
+    files = glob(os.path.join(OUTPUT_PATH, '*.csv'))
+
     df = None
     for f in files:
-        title = f.split('/')[-1]
-        episode = '_'.join(title.split('_')[0:2])
+        epiFile = f.split('/')[-1]
+        episode = '_'.join(epiFile.split('_')[0:2])
+        title = epiFile.split('_')[-1][:-4]
         if df is None:
             df = pd.read_csv(f, index_col=0)
             df['episode'] = episode
+            df['title'] = title
         else:
             tmp = pd.read_csv(f, index_col=0)
             tmp['episode'] = episode
+            tmp['title'] = title
             df = df.append(tmp)
 
     df.to_csv(os.path.join(OUTPUT_PATH, 'all_episodes.csv'), index=False)
@@ -118,10 +130,22 @@ if __name__ == "__main__":
     df_episode_list = []
     for id, v in df.groupby('episode'):
         dialog_str = ' '.join(v.dialog.values)
-        df_episode_list.append([id, dialog_str])
-    df_epi = pd.DataFrame(df_episode_list, columns=['id','dialog'])
+        df_episode_list.append([id, v.title.iloc[0], dialog_str])
+    df_epi = pd.DataFrame(df_episode_list, columns=['id', 'title', 'dialog'])
 
+    # Remove the pilot
+    df_epi.drop(index=62, inplace=True)
+
+    # Fix the episode ids to preserve sort order later on
+    def fix_epi(s):
+        sn_ep = s.split('_')
+        if len(sn_ep[1]) == 1:
+            return sn_ep[0] + '_0' + sn_ep[1]
+        else:
+            return s
+    df_epi['id'] = df_epi.id.apply(fix_epi)
     # Dump to disk and finish up in R
     df_epi.to_csv(os.path.join(OUTPUT_PATH, 'episode_dialog.csv'), index=False)
+
 
 
